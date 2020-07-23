@@ -1,5 +1,4 @@
 
-
 ## Code for running elastic net on the UCI Communities and Crime dataset
 ## https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized
 ## Analysis adapted from https://medium.com/@jayeshbahire/lasso-ridge-and-elastic-net-regularization-4807897cb722
@@ -13,7 +12,6 @@ import matplotlib.pyplot as plt
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 
-from sklearn.linear_model import ElasticNet, ElasticNetCV
 
 from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV
 import time
@@ -35,43 +33,71 @@ from GPyOpt.methods import BayesianOptimization
 import qgrid
 
 from scipy.stats import uniform
-from sklearn.utils.fixes import loguniform
-
 
 import sklearn
 
 from sklearn.impute import KNNImputer
 
-
-from sklearn.linear_model import ElasticNetCV
-
 #%matplotlib inline
 
+
+
+
+# Optimization objective
 def cv_score(parameters):
     parameters = parameters[0]
     score = cross_val_score(
-                ElasticNet(alpha=parameters[0],
-                              l1_ratio=parameters[1],
-                           normalize=True,
-                           max_iter=10000),
-                train_x, train_y, scoring='r2', cv = 10,
-        n_jobs=-1).mean()
+                XGBRegressor(learning_rate=parameters[0],
+                              gamma=int(parameters[1]),
+                              max_depth=int(parameters[2]),
+                              n_estimators=int(parameters[3]),
+                              min_child_weight = parameters[4]),
+                X, Y, scoring='neg_mean_squared_error').mean()
     score = np.array(score)
     return score
 
 
+def search(pipeline, parameters, X_train, y_train, X_test, y_test, optimizer='grid_search', n_iter=None):
+      start = time.time()
 
+      if optimizer == 'grid_search':
+            grid_obj = GridSearchCV(estimator=pipeline,
+                                    param_grid=parameters,
+                                    cv=10,
+                                    refit=True,
+                                    return_train_score=False,
+                                    scoring='accuracy',
+                                    )
+            grid_obj.fit(X_train, y_train, )
 
-def report(results, n_top=3):
-    for i in range(1, n_top + 1):
-        candidates = np.flatnonzero(results['rank_test_score'] == i)
-        for candidate in candidates:
-            print("Model with rank: {0}".format(i))
-            print("Mean validation score: {0:.3f} (std: {1:.3f})"
-                  .format(results['mean_test_score'][candidate],
-                          results['std_test_score'][candidate]))
-            print("Parameters: {0}".format(results['params'][candidate]))
-            print("")
+      elif optimizer == 'random_search':
+            grid_obj = RandomizedSearchCV(estimator=pipeline,
+                                          param_distributions=parameters,
+                                          cv=5,
+                                          n_iter=n_iter,
+                                          refit=True,
+                                          return_train_score=False,
+                                          scoring='accuracy',
+                                          random_state=1)
+            grid_obj.fit(X_train, y_train, )
+
+      else:
+            print('enter search method')
+            return
+
+      estimator = grid_obj.best_estimator_
+      cvs = cross_val_score(estimator, X_train, y_train, cv=5)
+      results = pd.DataFrame(grid_obj.cv_results_)
+
+      print("##### Results")
+      print("Score best parameters: ", grid_obj.best_score_)
+      print("Best parameters: ", grid_obj.best_params_)
+      print("Cross-validation Score: ", cvs.mean())
+      print("Test Score: ", estimator.score(X_test, y_test))
+      print("Time elapsed: ", time.time() - start)
+      print("Parameter combinations evaluated: ", results.shape[0])
+
+      return results, estimator
 
 
 crime = pd.read_csv('CommViolPredUnnormalizedData.txt',
@@ -226,10 +252,19 @@ crime = pd.read_csv('CommViolPredUnnormalizedData.txt',
                           'ViolentCrimesPerPop',
                           'nonViolPerPop'])
 
+
+crime.head()
+
 count_null = crime.isnull().sum(axis = 0)
+qgrid.show_grid(count_null)
+
+
 crime.columns[crime.isnull().mean() < 0.5]
 crime_filtered = crime[crime.columns[crime.isnull().mean() < 0.5]]
 count_null = crime_filtered.isnull().sum(axis = 0)
+qgrid.show_grid(count_null)
+
+
 crime_filtered=crime_filtered.dropna(subset = ['larcPerPop'])
 
 
@@ -240,20 +275,80 @@ X = imputer.fit_transform(X)
 
 Y = crime_filtered.loc[:, 'larcPerPop']
 
+
+
+## Split into a Training and Test Set
+
 train_x, test_x, train_y, test_y = train_test_split(X,Y,test_size=.3,random_state=42)
 
+train_x.shape
+test_x.shape
+train_y.shape
+test_y.shape
 
-enet = ElasticNet(max_iter=10000,normalize=True, l1_ratio=.5)
 
-param_dist = {"alpha": np.logspace(-10, 1,1000)}
 
-rs = GridSearchCV(enet,
-                  param_grid=param_dist,
-                  n_jobs=-1,
-                  verbose=2,
-                  cv=10)
+
+
+param_dist = {"learning_rate": uniform(0, 1),
+              "gamma": uniform(0, 5),
+              "max_depth": range(1,50),
+              "n_estimators": range(1,300),
+              "min_child_weight": range(1,10)}
+
+
+
+bds = [{'name': 'learning_rate', 'type': 'continuous', 'domain': (0, 1)},
+        {'name': 'gamma', 'type': 'continuous', 'domain': (0, 5)},
+        {'name': 'max_depth', 'type': 'discrete', 'domain': (1, 50)},
+        {'name': 'n_estimators', 'type': 'discrete', 'domain': (1, 300)},
+        {'name': 'min_child_weight', 'type': 'discrete', 'domain': (1, 10)}]
+
+
+
+xgb = XGBRegressor()
+
+baseline = cross_val_score(xgb, train_x, train_y, scoring='r2', cv=10).mean()
+
+
+rs = RandomizedSearchCV(xgb, param_distributions=param_dist,
+                        scoring='r2', n_iter=100, n_jobs=-1,verbose=2, cv=10 )
+
 
 rs.fit(train_x, train_y)
 
 
-df=pd.DataFrame(rs.cv_results_['param_alpha'],rs.cv_results_['mean_test_score'])
+ncore=10
+batch=10
+
+optimizer = BayesianOptimization(f=cv_score,
+                                 domain=bds,
+                                 model_type='GP',
+                                 acquisition_type ='EI',
+                                 acquisition_jitter = 0.05,
+                                 exact_feval=True,
+                                 maximize=True,
+                                 evaluator_type='local_penalization',
+                                 batch_size = batch,
+                                 num_cores=ncore,
+                                 verbosity=True)
+
+
+# Only 20 iterations because we have 5 initial random points
+optimizer.run_optimization(max_iter=10)
+
+
+y_rs = np.maximum.accumulate(rs.cv_results_['mean_test_score'])
+y_bo = np.maximum.accumulate(-optimizer.Y).ravel()
+
+print(f'Baseline neg. MSE = {baseline:.2f}')
+print(f'Random search neg. MSE = {y_rs[-1]:.2f}')
+print(f'Bayesian optimization neg. MSE = {y_bo[-1]:.2f}')
+
+plt.plot(y_rs, 'ro-', label='Random search')
+plt.plot(y_bo, 'bo-', label='Bayesian optimization')
+plt.xlabel('Iteration')
+plt.ylabel('Neg. MSE')
+plt.ylim(-5000, -3000)
+plt.title('Value of the best sampled CV score')
+plt.legend()

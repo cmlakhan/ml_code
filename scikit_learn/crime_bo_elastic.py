@@ -1,5 +1,4 @@
 
-
 ## Code for running elastic net on the UCI Communities and Crime dataset
 ## https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime+Unnormalized
 ## Analysis adapted from https://medium.com/@jayeshbahire/lasso-ridge-and-elastic-net-regularization-4807897cb722
@@ -13,7 +12,7 @@ import matplotlib.pyplot as plt
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 
-from sklearn.linear_model import ElasticNet, ElasticNetCV
+from sklearn.linear_model import ElasticNet
 
 from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV
 import time
@@ -41,9 +40,6 @@ from sklearn.utils.fixes import loguniform
 import sklearn
 
 from sklearn.impute import KNNImputer
-
-
-from sklearn.linear_model import ElasticNetCV
 
 #%matplotlib inline
 
@@ -243,17 +239,64 @@ Y = crime_filtered.loc[:, 'larcPerPop']
 train_x, test_x, train_y, test_y = train_test_split(X,Y,test_size=.3,random_state=42)
 
 
-enet = ElasticNet(max_iter=10000,normalize=True, l1_ratio=.5)
 
-param_dist = {"alpha": np.logspace(-10, 1,1000)}
+bds = [{'name': 'alpha', 'type': 'continuous', 'domain': (1e-10, 10)},
+        {'name': 'l1_ratio', 'type': 'continuous', 'domain': (0, 1)}]
 
-rs = GridSearchCV(enet,
-                  param_grid=param_dist,
-                  n_jobs=-1,
-                  verbose=2,
-                  cv=10)
+param_dist = {"alpha": loguniform(1e-10, 10e0),
+              "l1_ratio": uniform(0, 1)}
+
+
+enet = ElasticNet(max_iter=10000,normalize=True)
+
+
+
+baseline = cross_val_score(enet, train_x, train_y, scoring='r2', cv=10).mean()
+
+
+rs = RandomizedSearchCV(enet,
+                        param_distributions=param_dist,
+                        scoring='r2',
+                        n_jobs=-1,
+                        verbose=2,
+                        cv=10,
+                        n_iter=100)
 
 rs.fit(train_x, train_y)
 
 
-df=pd.DataFrame(rs.cv_results_['param_alpha'],rs.cv_results_['mean_test_score'])
+
+optimizer = BayesianOptimization(f=cv_score,
+                                 domain=bds,
+                                 model_type='GP',
+                                 acquisition_type ='EI',
+                                 acquisition_jitter = 0.05,
+                                 exact_feval=True,
+                                 maximize=True,
+                                 verbosity=True)
+
+
+optimizer.run_optimization(max_iter=100)
+
+
+
+
+
+
+y_rs = np.maximum.accumulate(rs.cv_results_['mean_test_score'])
+y_bo = np.maximum.accumulate(-optimizer.Y).ravel()
+
+print(f'Baseline neg. MSE = {baseline:.2f}')
+print(f'Random search neg. MSE = {y_rs[-1]:.2f}')
+print(f'Bayesian optimization neg. MSE = {y_bo[-1]:.2f}')
+
+plt.plot(y_rs, 'ro-', label='Random search')
+plt.plot(y_bo, 'bo-', label='Bayesian optimization')
+plt.xlabel('Iteration')
+plt.ylabel('Neg. MSE')
+plt.ylim(-5000, -3000)
+plt.title('Value of the best sampled CV score')
+plt.legend()
+
+
+report(rs.cv_results_)
