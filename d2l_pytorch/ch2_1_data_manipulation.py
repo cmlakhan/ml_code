@@ -61,3 +61,47 @@ x == y
 
 
 ## Sum
+x.sum()
+
+# Broadcasting
+a = torch.arange(3).reshape((3, 1))
+b = torch.arange(2).reshape((1, 2))
+a, b
+
+## since they are different shapes then this will add the values element-wise
+a+b
+
+# Indexing and Slicing
+x[-1], x[1:3]
+
+## Set value
+x[1, 2] = 9
+x
+
+
+## save memory
+before = id(y)
+y = y + x
+id(y) == before
+
+
+z = torch.zeros_like(y)
+print('id(z):', id(z))
+z[:] = x + y
+print('id(z):', id(z))
+
+
+
+## Reuse memory correctly
+before = id(x)
+x += y
+id(x) == before
+
+
+## Convert from numpy to torch tensor and vice versa
+a = x.numpy()
+b = torch.tensor(a)
+type(a), type(b)
+
+a = torch.tensor([3.5])
+a, a.item(), float(a), int(a)
