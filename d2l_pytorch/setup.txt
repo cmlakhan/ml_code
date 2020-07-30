@@ -3,4 +3,4 @@ jupyter notebook
 
 http://localhost:8888/?token=62ab715eda92eeca88f19fa92e4b83e5452161ab6c3cdc62
 
-ssh -i etl_ec2.pem -L 8888:localhost:8888 ubuntu@54.236.135.21
+ssh -i etl_ec2.pem -L 8888:localhost:8888 ubuntu@35.153.100.112
