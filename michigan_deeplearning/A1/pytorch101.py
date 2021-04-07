@@ -24,7 +24,7 @@ def create_sample_tensor():
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  x = torch.Tensor([[0,10],[100,0],[0,0]])
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -58,7 +58,8 @@ def mutate_tensor(x, indices, values):
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  for i in range(0,len(indices)):
+    x[indices[i][0],indices[i][1]] = values[i] 
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -87,7 +88,12 @@ def count_tensor_elements(x):
   #   You CANNOT use the built-in functions torch.numel(x) or x.numel().      #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  rank = x.dim()
+  shape = x.shape
+  num_elements = 1
+  for i in range(0,rank):
+    num_elements = num_elements * shape[i]
+
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -104,7 +110,8 @@ def create_tensor_of_pi(M, N):
   Returns:
   - x: A tensor of shape (M, N) filled with the value 3.14
   """
-  x = None
+  pi = 3.14
+  x = torch.ones(M,N) * pi
   #############################################################################
   #       TODO: Implement this function. It should take one line.             #
   #############################################################################
