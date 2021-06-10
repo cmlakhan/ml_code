@@ -406,7 +406,8 @@ def reshape_practice(x):
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  y=x.view(2,3,4).transpose(0,1).contiguous().view(3,-1)
+
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -444,7 +445,11 @@ def zero_row_min(x):
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  y=x.clone()
+  idx0 = torch.arange(y.shape[0])
+  row_min_vals, row_min_idx = y.min(axis=1)
+  y[idx0,row_min_idx] = 0
+
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -477,7 +482,13 @@ def batched_matrix_multiply(x, y, use_loop=True):
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  z = torch.zeros(x.shape[0],x.shape[1],y.shape[2])
+  if use_loop:
+    for i in range(0,x.shape[0]):
+      z[i] = torch.mm(x[i],y[i])
+  else:
+    z = torch.bmm(x,y)
+
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -512,7 +523,9 @@ def normalize_columns(x):
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  mean = x.mean(axis=0)
+  std = x.std(axis=0)
+  y = (x-mean)/std
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
@@ -557,7 +570,10 @@ def mm_on_gpu(x, w):
   #                    TODO: Implement this function                          #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  x_cuda = x.cuda()
+  w_cuda = w.cuda()
+  y_cuda = x_cuda.mm(w_cuda)
+  y = y_cuda.cpu()
   #############################################################################
   #                            END OF YOUR CODE                               #
   #############################################################################
