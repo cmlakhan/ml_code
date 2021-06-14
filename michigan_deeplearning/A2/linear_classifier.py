@@ -126,9 +126,12 @@ def svm_loss_naive(W, X, y, reg):
         # that the loss is being computed.                                    #
         #######################################################################
         # Replace "pass" statement with your code
-        pass
+        dW[:,j] += X[i]
+        dW[:,y[i]] += -X[i] 
+    dW += 2*reg*W
+  dW /= num_train
         #######################################################################
-        #                       END OF YOUR CODE                              #
+        #                       END OF YOUR CODE                              #     
         #######################################################################
 
 
@@ -178,7 +181,19 @@ def svm_loss_vectorized(W, X, y, reg):
   # result in loss.                                                           #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  S = torch.matmul(X,W)
+  num_rows = S.shape[0]
+  row = torch.arange(0,num_rows)
+  idx = y.long()
+  syj = S[row,idx]
+  S = S - syj.unsqueeze(1)
+  delta = torch.ones_like(S) * 1.0
+  delta[row,idx] = 0
+  S = S + delta
+  S = torch.relu(S)
+  loss = (torch.sum(S))/num_rows
+
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -193,7 +208,12 @@ def svm_loss_vectorized(W, X, y, reg):
   # loss.                                                                     #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  num_pos = S.clone().detach()
+  num_pos[num_pos > 0] = 1
+  sum_cols = -torch.sum(num_pos, axis=1)
+  num_pos[row,idx] = sum_cols
+  dW = torch.matmul(torch.transpose(X,0,1),num_pos)
+  dW /= num_rows
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
