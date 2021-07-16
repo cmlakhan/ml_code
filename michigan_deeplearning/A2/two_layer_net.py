@@ -116,7 +116,12 @@ def nn_forward_pass(params, X):
     # shape (N, C).                                                            #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    z1 = torch.matmul(X,W1) + b1
+    a1 = torch.relu(z1)
+    z2 = torch.matmul(a1,W2) + b2
+    scores = z2
+    hidden = a1
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -176,13 +181,20 @@ def nn_forward_backward(params, X, y=None, reg=0.0):
     # (Check Numeric Stability in http://cs231n.github.io/linear-classify/).   #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    row = torch.arange(0,N)
+    idx = y.long()
+    syj = scores[row,idx]
+    exp_vec = torch.exp(scores)
+    sum_exp = torch.sum(exp_vec, axis=1)
+    loss = -syj + torch.log(sum_exp)
+    loss = torch.sum(loss)
+    loss += reg * torch.sum(W1 * W1) + reg * torch.sum(W2*W2)
+    loss /= N
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
 
     # Backward pass: compute gradients
-    grads = {}
     ###########################################################################
     # TODO: Compute the backward pass, computing the derivatives of the       #
     # weights and biases. Store the results in the grads dictionary.          #
@@ -190,7 +202,42 @@ def nn_forward_backward(params, X, y=None, reg=0.0):
     # tensor of same size                                                     #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    grads = {}
+    S1 = torch.matmul(X,W1)
+    S2 = S1+b1
+    S3 = torch.relu(S2)
+    S4 = torch.matmul(S3,W2)
+    S5 = S4 + b2
+
+    d_S5_id = torch.zeros_like(S5)
+    d_S5_id[row,idx] = -1
+    d_S5_exp = torch.exp(S5)
+    d_S5_expS_sum = d_S5_exp.sum(axis=1).view(N,1)
+    d_S5_expS_norm = d_S5_exp/d_S5_expS_sum
+    d_S5 = d_S5_id + d_S5_expS_norm
+
+    d_S4 = d_S5
+    d_b2 = d_S5.mean(axis=0)
+    d_S3 = torch.matmul(d_S4, W2.transpose(0,1))
+    d_W2 = torch.matmul(S3.transpose(0,1), d_S4)
+    d_S3_mask = d_S3.clone().detach()
+    d_S3_mask[d_S3_mask < 0] = 0
+    d_S3_mask[d_S3_mask > 0] = 1
+    d_S2 = d_S3 * d_S3_mask
+    d_S1 = d_S2
+    d_b1 = d_S2.mean(axis=0)
+    d_W1 = torch.matmul(X.transpose(0,1), d_S1)    
+
+    d_W1 += 2*reg*W1
+    d_W2 += 2*reg*W2
+    d_W1 /= N
+    d_W2 /= N
+
+    grads['W1'] = d_W1
+    grads['W2'] = d_W2
+    grads['b1'] = d_b1
+    grads['b2'] = d_b2
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -260,7 +307,11 @@ def nn_train(params, loss_func, pred_func, X, y, X_val, y_val,
     # stored in the grads dictionary defined above.                         #
     #########################################################################
     # Replace "pass" statement with your code
-    pass
+    params['W1'] = params['W1'] - learning_rate*grads['W1'] 
+    params['W2'] = params['W2'] - learning_rate*grads['W2']
+    params['b1'] = params['b1'] - learning_rate*grads['b1']
+    params['b2'] = params['b2'] - learning_rate*grads['b2']
+  
     #########################################################################
     #                             END OF YOUR CODE                          #
     #########################################################################
@@ -316,7 +367,16 @@ def nn_predict(params, loss_func, X):
   # TODO: Implement this function; it should be VERY simple!                #
   ###########################################################################
   # Replace "pass" statement with your code
-  pass
+  W1 = params['W1']
+  W2 = params['W2']
+  b1 = params['b1']
+  b2 = params['b2']
+  S1 = torch.matmul(X,W1)
+  S2 = S1+b1
+  S3 = torch.relu(S2)
+  S4 = torch.matmul(S3,W2)
+  S5 = S4 + b2
+  y_pred = torch.argmax(S5, axis=1)
   ###########################################################################
   #                              END OF YOUR CODE                           #
   ###########################################################################
@@ -351,7 +411,10 @@ def nn_get_search_params():
   # classifier.                                                             #
   ###########################################################################
   # Replace "pass" statement with your code
-  pass
+  learning_rates = [1e-4,1e-3,1e-2, 1e-1]
+  hidden_sizes = [2**5,2**6,2**7,2**8]
+  regularization_strengths = [1e-4,1e-3,1e-2, 1e-1]
+  learning_rate_decays = [0.95]
   ###########################################################################
   #                           END OF YOUR CODE                              #
   ###########################################################################
@@ -405,7 +468,23 @@ def find_best_net(data_dict, get_param_set_fn):
   # automatically like we did on the previous exercises.                      #
   #############################################################################
   # Replace "pass" statement with your code
-  pass
+  learning_rates, hidden_sizes, regularization_strengths, learning_rate_decays =  nn_get_search_params()
+  for lr in learning_rates:
+    for hs in hidden_sizes:
+      for reg in regularization_strengths:
+        for lrd in learning_rate_decays:
+          net = TwoLayerNet(3 * 32 * 32, hs, 10, device=data_dict['X_train'].device, dtype=data_dict['X_train'].dtype)
+          stats = net.train(data_dict['X_train'], data_dict['y_train'], data_dict['X_val'], data_dict['y_val'],
+            num_iters=3000, batch_size=1000,
+            learning_rate=lr, learning_rate_decay=lrd,
+            reg=reg, verbose=False)
+          val_acc = stats['val_acc_history'][-1]
+          if val_acc > best_val_acc:
+            best_net = net
+            best_stat = stats
+            best_val_acc = val_acc
+
+
   #############################################################################
   #                               END OF YOUR CODE                            #
   #############################################################################
